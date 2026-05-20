@@ -1,3 +1,5 @@
+import copy
+
 import networkx as nx
 
 from database.DAO import DAO
@@ -7,6 +9,7 @@ class Model:
     def __init__(self):
         self._graph=nx.DiGraph()
         self._idMapArtists={}
+        self._longestPath=[]
 
     def createGraph(self, genreId):
         self._graph.clear()
@@ -16,17 +19,17 @@ class Model:
         self._graph.add_nodes_from(artists)
         for a in artists:
             self._idMapArtists[a.ArtistId]=a
-        self._getPopularity()
-        self._addEdges()
+        self._getPopularity(genreId)
+        self._addEdges(genreId)
 
-    def _getPopularity(self):
-        popularity=DAO.getPopularity()
+    def _getPopularity(self,genreId):
+        popularity=DAO.getPopularity(genreId)
         for a_id, artista in self._idMapArtists.items():
             artista.popularity=int(popularity.get(a_id,0))
 
 
-    def _addEdges(self):
-        edges=DAO.getAllEdges()
+    def _addEdges(self,genreId):
+        edges=DAO.getAllEdges(genreId)
         for id1,id2 in edges:
             if id1 in self._idMapArtists and id2 in self._idMapArtists:
                 a1=self._idMapArtists[id1]
@@ -60,10 +63,33 @@ class Model:
         for u,v, data in self._graph.out_edges(artist, data=True):
             pesoUscenti+=data["weight"]
         for u,v, data in self._graph.in_edges(artist, data=True):
-            pesoUscenti+=data["weight"]
+            pesoEntranti+=data["weight"]
         return pesoUscenti-pesoEntranti
 
     def getTopEdges(self):
-        edges=self._graph.edges(data=True)
-        edgesSorted=sorted(edges, key=lambda x: x[2]["weight"], reverse= True)
-        return edgesSorted
+        edges= sorted(self._graph.edges(data=True), key=lambda x: x[2]["weight"], reverse= True)
+        return edges[:5]
+    def getArtist(self):
+        return self._graph.nodes()
+
+    def cercaPercorso(self, artistId):
+        source=self._idMapArtists[artistId]
+        self._longestPathCost=0
+        self._longestPath=[]
+        parziale=[source]
+        self._ricorsione(parziale, pesoUltimo=-1)
+
+        return self._longestPath
+
+    def _ricorsione(self,parziale, pesoUltimo):
+        if len(parziale)>len(self._longestPath):
+            self._longestPath=copy.deepcopy(parziale)
+
+        nodoCorrente=parziale[-1]
+        for vicino in self._graph.neighbors(nodoCorrente):
+            if vicino not in parziale:
+                peso_nuovo_arco = self._graph[nodoCorrente][vicino]["weight"]
+                if peso_nuovo_arco>pesoUltimo:
+                    parziale.append(vicino)
+                    self._ricorsione(parziale,peso_nuovo_arco)
+                    parziale.pop()
