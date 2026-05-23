@@ -9,7 +9,8 @@ class Model:
     def __init__(self):
         self._graph=nx.DiGraph()
         self._idMapArtists={}
-        self._longestPath=[]
+        self._bestPath=[]
+        self._bestObjValue=0
 
     def createGraph(self, genreId):
         self._graph.clear()
@@ -80,6 +81,41 @@ class Model:
         self._ricorsione(parziale, pesoUltimo=-1)
 
         return self._longestPath
+
+    import copy
+
+    def cercaPercorsoV2(self, artistId):
+        self._bestPath = []
+        self._bestObjValue = 0
+
+        source = self._idMapArtists[artistId]
+        parziale = [source]
+
+        self._ricorsioneV2(parziale)
+
+        return self._bestPath, self._bestObjValue
+
+    def _ricorsioneV2(self, parziale):
+        if len(parziale) > self._bestObjValue:
+            self._bestPath = copy.deepcopy(parziale)
+            self._bestObjValue = len(parziale)
+
+        nodoCorrente = parziale[-1]
+        for v in self._graph.neighbors(nodoCorrente):
+            if v not in parziale:
+                peso_nuovo = self._graph[nodoCorrente][v]["weight"]
+                if len(parziale) == 1:
+                    peso_valido = True
+                else:
+                    peso_vecchio = self._graph[parziale[-2]][nodoCorrente]["weight"]
+                    peso_valido = peso_nuovo > peso_vecchio
+
+                if peso_valido:
+                    parziale.append(v)  # Faccio il passo
+                    self._ricorsioneV2(parziale)  # Esploro a fondo
+                    parziale.pop()  # Torno indietro
+
+
 
     def _ricorsione(self,parziale, pesoUltimo):
         if len(parziale)>len(self._longestPath):
