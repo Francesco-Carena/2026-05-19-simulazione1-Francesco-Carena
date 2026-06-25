@@ -94,3 +94,129 @@ class DAO():
         cursor.close()
         conn.close()
         return result
+
+    @staticmethod
+    def getPopularity(genreId):
+        conn = DBConnect.get_connection()
+        result = {}
+        cursor = conn.cursor(dictionary=True)
+        query = """select distinct ar.ArtistId, SUM(il.Quantity) as Popularity
+                   from track t, \
+                        album a, \
+                        artist ar, \
+                        invoiceline il
+                   where t.AlbumId = a.AlbumId \
+                     and t.TrackId = il.TrackId \
+                     and ar.ArtistId = a.ArtistId \
+                     and t.GenreId = %s
+                   group by ar.ArtistId """
+
+        cursor.execute(query, (genreId,))
+
+        for row in cursor:
+            result[row["ArtistId"]] = row["Popularity"]
+
+        cursor.close()
+        conn.close()
+        return result
+
+    @staticmethod
+    def getPopularity(genreId):
+        conn = DBConnect.get_connection()
+        result = {}
+        cursor = conn.cursor(dictionary=True)
+        query = """select distinct ar.ArtistId, SUM(il.Quantity) as Popularity
+                   from track t, \
+                        album a, \
+                        artist ar, \
+                        invoiceline il
+                   where t.AlbumId = a.AlbumId \
+                     and t.TrackId = il.TrackId \
+                     and ar.ArtistId = a.ArtistId \
+                     and t.GenreId = %s
+                   group by ar.ArtistId """
+
+        cursor.execute(query, (genreId,))
+
+        for row in cursor:
+            result[row["ArtistId"]] = row["Popularity"]
+
+        cursor.close()
+        conn.close()
+        return result
+
+"""
+vertice=Track, arco se due brani nella stessa playlist. Peso = numero di playlist che condividono.
+SELECT pt1.TrackId AS id_brano1, pt2.TrackId AS id_brano2, COUNT(pt1.PlaylistId) as playlist_in_comune
+FROM playlisttrack pt1, playlisttrack pt2
+WHERE pt1.PlaylistId = pt2.PlaylistId
+  AND pt1.TrackId < pt2.TrackId
+GROUP BY pt1.TrackId, pt2.TrackId;
+
+Nodi=Customer, arco se hanno acquistato lo stesso brano. Peso=numero di brani distinti comprati in comune.
+SELECT i1.CustomerId AS id_cliente1, i2.CustomerId AS id_cliente2, COUNT(DISTINCT il1.TrackId) AS brani_comuni
+FROM invoice i1
+JOIN invoiceline il1 ON i1.InvoiceId = il1.InvoiceId
+JOIN invoiceline il2 ON il1.TrackId = il2.TrackId
+JOIN invoice i2 ON il2.InvoiceId = i2.InvoiceId
+WHERE i1.CustomerId < i2.CustomerId
+GROUP BY i1.CustomerId, i2.CustomerId;
+
+Nodi=Employee. Arco orientato va dal "Capo" al "Sottoposto".
+SELECT e1.EmployeeId AS id_capo, e2.EmployeeId AS id_sottoposto
+FROM employee e1
+JOIN employee e2 ON e1.EmployeeId = e2.ReportsTo;
+
+Estrarre solo i clienti che hanno speso complessivamente più di $X
+SELECT c.CustomerId, c.FirstName, c.LastName, SUM(i.Total) as SpesaTotale
+FROM customer c
+JOIN invoice i ON c.CustomerId = i.CustomerId
+GROUP BY c.CustomerId
+HAVING SUM(i.Total) > %s;
+
+Nodi = Brani che sono stati venduti in quantità maggiore o uguale a N.
+SELECT t.TrackId, t.Name, SUM(il.Quantity) as CopieVendute
+FROM track t
+JOIN invoiceline il ON t.TrackId = il.TrackId
+GROUP BY t.TrackId
+HAVING SUM(il.Quantity) >= %s;
+
+Artisti che hanno brani di almeno due generi diversi.
+SELECT a.ArtistId, a.Name, COUNT(DISTINCT t.GenreId) as NumGeneri
+FROM artist a
+JOIN album al ON a.ArtistId = al.ArtistId
+JOIN track t ON al.AlbumId = t.AlbumId
+GROUP BY a.ArtistId
+HAVING COUNT(DISTINCT t.GenreId) >= 2;
+
+Playlist sono collegate se condividono almeno N brani. Peso è il costo totale dei brani condivisi.
+SELECT pt1.PlaylistId AS id1, pt2.PlaylistId AS id2, SUM(t.UnitPrice) AS peso_arco
+FROM playlisttrack pt1
+JOIN playlisttrack pt2 ON pt1.TrackId = pt2.TrackId
+JOIN track t ON pt1.TrackId = t.TrackId
+WHERE pt1.PlaylistId < pt2.PlaylistId
+GROUP BY pt1.PlaylistId, pt2.PlaylistId
+HAVING COUNT(pt1.TrackId) >= %s;
+
+Nodi: Customer. Archi: Due clienti se hanno acquistato almeno uno stesso brano identico.
+Peso: Numero totale di brani distinti acquistati in comune.
+SELECT i1.CustomerId AS C1, i2.CustomerId AS C2, COUNT(DISTINCT il1.TrackId) as Peso
+FROM invoice i1
+JOIN invoiceline il1 ON i1.InvoiceId = il1.InvoiceId
+JOIN invoiceline il2 ON il1.TrackId = il2.TrackId
+JOIN invoice i2 ON il2.InvoiceId = i2.InvoiceId
+WHERE i1.CustomerId < i2.CustomerId
+GROUP BY i1.CustomerId, i2.CustomerId;
+
+
+Nodo=Track di un Genere. Archi: Due brani sono collegati se sono stati acquistati insieme all'interno della stessa fattura/scontrino.
+Peso: Numero di fatture in cui i due brani compaiono insieme.
+SELECT il1.TrackId AS T1, il2.TrackId AS T2, COUNT(il1.InvoiceId) AS Peso
+FROM invoiceline il1
+JOIN track t1 ON il1.TrackId = t1.TrackId
+JOIN invoiceline il2 ON il1.InvoiceId = il2.InvoiceId
+JOIN track t2 ON il2.TrackId = t2.TrackId
+WHERE il1.TrackId < il2.TrackId
+  AND t1.GenreId = %s AND t2.GenreId = %s
+GROUP BY il1.TrackId, il2.TrackId;
+"""

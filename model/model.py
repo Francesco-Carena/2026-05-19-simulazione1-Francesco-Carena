@@ -82,7 +82,6 @@ class Model:
 
         return self._longestPath
 
-    import copy
 
     def cercaPercorsoV2(self, artistId):
         self._bestPath = []
@@ -111,9 +110,9 @@ class Model:
                     peso_valido = peso_nuovo > peso_vecchio
 
                 if peso_valido:
-                    parziale.append(v)  # Faccio il passo
-                    self._ricorsioneV2(parziale)  # Esploro a fondo
-                    parziale.pop()  # Torno indietro
+                    parziale.append(v)
+                    self._ricorsioneV2(parziale)
+                    parziale.pop()
 
 
 
