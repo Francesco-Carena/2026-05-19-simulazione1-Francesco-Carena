@@ -47,10 +47,10 @@ class DAO():
         conn = DBConnect.get_connection()
         result = {}
         cursor = conn.cursor(dictionary=True)
-        query = """select distinct ar.ArtistId, SUM(il.Quantity) as Popularity
-                    from track t, album a, artist ar,invoiceline il 
-                    where t.AlbumId=a.AlbumId and t.TrackId =il.TrackId and ar.ArtistId=a.ArtistId and t.GenreId=%s 
-                    group by ar.ArtistId """
+        query = """select distinct a.ArtistId, SUM(il.Quantity) as Popularity
+                    from track t, album a,invoiceline il 
+                    where t.AlbumId=a.AlbumId and t.TrackId =il.TrackId and t.GenreId=%s 
+                    group by a.ArtistId """
 
         cursor.execute(query, (genreId,))
 
@@ -63,6 +63,31 @@ class DAO():
 
     @staticmethod
     def getAllEdges(genreId):
+        conn = DBConnect.get_connection()
+        result = []
+        cursor = conn.cursor(dictionary=True)
+        query = """SELECT DISTINCT t1.ArtistId as ID1, t2.ArtistId as ID2
+                    FROM (select al.ArtistId , inv.CustomerId 
+                    from album al, track t, invoice inv, invoiceline il
+                    where al.AlbumId =t.AlbumId  and t.TrackId =il.TrackId and inv.InvoiceId =il.InvoiceId
+                    and t.GenreId =%s) t1,
+                    (select al.ArtistId , inv.CustomerId 
+                    from album al, track t, invoice inv, invoiceline il
+                    where al.AlbumId =t.AlbumId  and t.TrackId =il.TrackId and inv.InvoiceId =il.InvoiceId
+                    and t.GenreId =%s) t2
+                    where t1.customerid =t2.customerid and t1.artistid <t2.artistid """
+
+        cursor.execute(query, (genreId, genreId))
+
+        for row in cursor:
+            result.append((row["ID1"], row["ID2"]))
+
+        cursor.close()
+        conn.close()
+        return result
+
+    @staticmethod
+    def getAllEdgesSlow(genreId):
         conn = DBConnect.get_connection()
         result = []
         cursor = conn.cursor(dictionary=True)
@@ -95,55 +120,6 @@ class DAO():
         conn.close()
         return result
 
-    @staticmethod
-    def getPopularity(genreId):
-        conn = DBConnect.get_connection()
-        result = {}
-        cursor = conn.cursor(dictionary=True)
-        query = """select distinct ar.ArtistId, SUM(il.Quantity) as Popularity
-                   from track t, \
-                        album a, \
-                        artist ar, \
-                        invoiceline il
-                   where t.AlbumId = a.AlbumId \
-                     and t.TrackId = il.TrackId \
-                     and ar.ArtistId = a.ArtistId \
-                     and t.GenreId = %s
-                   group by ar.ArtistId """
-
-        cursor.execute(query, (genreId,))
-
-        for row in cursor:
-            result[row["ArtistId"]] = row["Popularity"]
-
-        cursor.close()
-        conn.close()
-        return result
-
-    @staticmethod
-    def getPopularity(genreId):
-        conn = DBConnect.get_connection()
-        result = {}
-        cursor = conn.cursor(dictionary=True)
-        query = """select distinct ar.ArtistId, SUM(il.Quantity) as Popularity
-                   from track t, \
-                        album a, \
-                        artist ar, \
-                        invoiceline il
-                   where t.AlbumId = a.AlbumId \
-                     and t.TrackId = il.TrackId \
-                     and ar.ArtistId = a.ArtistId \
-                     and t.GenreId = %s
-                   group by ar.ArtistId """
-
-        cursor.execute(query, (genreId,))
-
-        for row in cursor:
-            result[row["ArtistId"]] = row["Popularity"]
-
-        cursor.close()
-        conn.close()
-        return result
 
 """
 vertice=Track, arco se due brani nella stessa playlist. Peso = numero di playlist che condividono.
@@ -181,13 +157,13 @@ JOIN invoiceline il ON t.TrackId = il.TrackId
 GROUP BY t.TrackId
 HAVING SUM(il.Quantity) >= %s;
 
-Artisti che hanno brani di almeno due generi diversi.
+Artisti che hanno brani di almeno x generi diversi.
 SELECT a.ArtistId, a.Name, COUNT(DISTINCT t.GenreId) as NumGeneri
 FROM artist a
 JOIN album al ON a.ArtistId = al.ArtistId
 JOIN track t ON al.AlbumId = t.AlbumId
 GROUP BY a.ArtistId
-HAVING COUNT(DISTINCT t.GenreId) >= 2;
+HAVING COUNT(DISTINCT t.GenreId) >= %s;
 
 Playlist sono collegate se condividono almeno N brani. Peso è il costo totale dei brani condivisi.
 SELECT pt1.PlaylistId AS id1, pt2.PlaylistId AS id2, SUM(t.UnitPrice) AS peso_arco
@@ -219,4 +195,59 @@ JOIN track t2 ON il2.TrackId = t2.TrackId
 WHERE il1.TrackId < il2.TrackId
   AND t1.GenreId = %s AND t2.GenreId = %s
 GROUP BY il1.TrackId, il2.TrackId;
+
+Nodi=Artist. Archi: Due artisti sono collegati se hanno almeno un brano all'interno della stessa playlist.
+Peso: Numero di playlist distinte in cui compaiono entrambi.
+SELECT t1.ArtistId AS id_artista1, t2.ArtistId AS id_artista2, COUNT(DISTINCT t1.PlaylistId) AS peso
+FROM (SELECT DISTINCT al.ArtistId, pt.PlaylistId
+      FROM album al, track t, playlisttrack pt
+      WHERE al.AlbumId = t.AlbumId AND t.TrackId = pt.TrackId) t1,
+     (SELECT DISTINCT al.ArtistId, pt.PlaylistId
+      FROM album al, track t, playlisttrack pt
+      WHERE al.AlbumId = t.AlbumId AND t.TrackId = pt.TrackId) t2
+WHERE t1.PlaylistId = t2.PlaylistId
+  AND t1.ArtistId < t2.ArtistId
+GROUP BY t1.ArtistId, t2.ArtistId;
+
+Nodi=Customer. Archi: Due clienti sono collegati se risiedono nello stesso state e hanno comprato almeno un brano in comune.
+Peso: Numero di brani distinti acquistati da entrambi.
+SELECT t1.CustomerId AS id1, t2.CustomerId AS id2, COUNT(DISTINCT t1.TrackId) AS brani_condivisi
+FROM (SELECT c.CustomerId, c.State, il.TrackId
+      FROM customer c, invoice i, invoiceline il
+      WHERE c.CustomerId = i.CustomerId AND i.InvoiceId = il.InvoiceId) t1,
+     (SELECT c.CustomerId, c.State, il.TrackId
+      FROM customer c, invoice i, invoiceline il
+      WHERE c.CustomerId = i.CustomerId AND i.InvoiceId = il.InvoiceId) t2
+WHERE t1.State = t2.State
+  AND t1.TrackId = t2.TrackId
+  AND t1.CustomerId < t2.CustomerId
+GROUP BY t1.CustomerId, t2.CustomerId;
+
+Nodi=Genre. Archi: Due generi musicali sono collegati se brani di entrambi i generi sono stati acquistati dallo stesso cliente.
+Peso: Numero di clienti distinti che hanno comprato entrambi i generi.
+SELECT t1.GenreId AS id_genere1, t2.GenreId AS id_genere2, COUNT(DISTINCT t1.CustomerId) AS peso_clienti
+FROM (SELECT DISTINCT t.GenreId, i.CustomerId
+      FROM track t, invoiceline il, invoice i
+      WHERE t.TrackId = il.TrackId AND il.InvoiceId = i.InvoiceId) t1,
+     (SELECT DISTINCT t.GenreId, i.CustomerId
+      FROM track t, invoiceline il, invoice i
+      WHERE t.TrackId = il.TrackId AND il.InvoiceId = i.InvoiceId) t2
+WHERE t1.CustomerId = t2.CustomerId
+  AND t1.GenreId < t2.GenreId
+GROUP BY t1.GenreId, t2.GenreId;
+
+Nodi=Track. Archi: Due brani sono collegati se appartengono allo stesso Album.
+Peso: Differenza assoluta in millisecondi tra le durate dei due brani (utile per grafi dove si cerca la distanza/somiglianza).
+SELECT t1.TrackId AS id1, t2.TrackId AS id2, ABS(t1.Milliseconds - t2.Milliseconds) AS differenza_durata
+FROM track t1, track t2
+WHERE t1.AlbumId = t2.AlbumId
+  AND t1.TrackId < t2.TrackId;
+  
+Nodi=Employee e Customer (Grafo Bipartito). Arco: Va dall'agente di supporto (SupportRepId) al cliente che gestisce.
+Peso: Il totale in dollari fatturato da quel cliente sotto la gestione di quell'impiegato.
+SELECT e.EmployeeId AS id_impiegato, c.CustomerId AS id_cliente, SUM(i.Total) AS fatturato_generato
+FROM employee e, customer c, invoice i
+WHERE e.EmployeeId = c.SupportRepId
+  AND c.CustomerId = i.CustomerId
+GROUP BY e.EmployeeId, c.CustomerId;
 """
