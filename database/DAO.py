@@ -250,4 +250,32 @@ FROM employee e, customer c, invoice i
 WHERE e.EmployeeId = c.SupportRepId
   AND c.CustomerId = i.CustomerId
 GROUP BY e.EmployeeId, c.CustomerId;
+
+Nodi=Track. Archi: Due brani sono collegati se sono stati acquistati a meno di X giorni di distanza l'uno dall'altro.
+Peso: Il numero di volte in cui questa "vicinanza" di acquisto si è verificata tra i due brani.
+SELECT t1.TrackId AS id1, t2.TrackId AS id2, COUNT(*) AS peso
+FROM (SELECT il.TrackId, i.InvoiceDate
+      FROM invoiceline il, invoice i
+      WHERE il.InvoiceId = i.InvoiceId) t1,
+     (SELECT il.TrackId, i.InvoiceDate
+      FROM invoiceline il, invoice i
+      WHERE il.InvoiceId = i.InvoiceId) t2
+WHERE t1.TrackId < t2.TrackId
+  AND ABS(DATEDIFF(t1.InvoiceDate, t2.InvoiceDate)) < %s
+GROUP BY t1.TrackId, t2.TrackId;
+
+
+SELECT t1.TrackId AS id1, t2.TrackId AS id2, COUNT(*) AS peso
+FROM (SELECT il.TrackId, i.InvoiceDate, t.AlbumId
+      FROM invoiceline il, invoice i, track t
+      WHERE il.InvoiceId = i.InvoiceId 
+        AND il.TrackId = t.TrackId) t1,
+     (SELECT il.TrackId, i.InvoiceDate, t.AlbumId
+      FROM invoiceline il, invoice i, track t
+      WHERE il.InvoiceId = i.InvoiceId 
+        AND il.TrackId = t.TrackId) t2
+WHERE t1.TrackId < t2.TrackId
+  AND ABS(DATEDIFF(t1.InvoiceDate, t2.InvoiceDate)) < %s
+  AND t1.AlbumId <> t2.AlbumId
+GROUP BY t1.TrackId, t2.TrackId;
 """

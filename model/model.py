@@ -75,8 +75,8 @@ class Model:
 
     def cercaPercorso(self, artistId):
         source=self._idMapArtists[artistId]
-        self._longestPathCost=0
-        self._longestPath=[]
+        #self._longestPathCost=0
+        self._bestPath=[]
         parziale=[source]
         self._ricorsione(parziale, pesoUltimo=-1)
 
@@ -85,14 +85,14 @@ class Model:
 
     def cercaPercorsoV2(self, artistId):
         self._bestPath = []
-        self._bestObjValue = 0
+        #self._bestObjValue = 0
 
         source = self._idMapArtists[artistId]
         parziale = [source]
 
         self._ricorsioneV2(parziale)
 
-        return self._bestPath, self._bestObjValue
+        return self._bestPath
 
     def _ricorsioneV2(self, parziale):
         if len(parziale) > self._bestObjValue:

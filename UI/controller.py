@@ -50,7 +50,7 @@ class Controller:
             self._view.update_page()
             return
         self._view.txt_result.clean()
-        percorso, peso=self._model.cercaPercorsoV2(self._choiceArtist)
+        percorso=self._model.cercaPercorsoV2(self._choiceArtist)
         self._view.txt_result.controls.append(ft.Text(f"percorso trovato:"))
         for artist in percorso:
             self._view.txt_result.controls.append(ft.Text(f"{artist}"))
